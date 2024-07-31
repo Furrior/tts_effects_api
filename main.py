@@ -91,8 +91,7 @@ app = FastAPI(debug=True)
 
 
 @app.post("/voice")
-async def translate_voice(request: VoiceRequest): #VoiceRequest
-    #print(f"Got {await request.body()}")
+async def translate_voice(request: VoiceRequest):
     body = request.model_dump()
     silero_response = await do_silero_request(body)
     response = ujson.loads(silero_response)
@@ -120,5 +119,4 @@ async def translate_voice(request: VoiceRequest): #VoiceRequest
 
 
 if __name__ == '__main__':
-    #print(asyncio.run(run_async_subprocess(["ffmpeg"])))
     uvicorn.run('main:app', host='127.0.0.1', port=settings.port, reload=True)
