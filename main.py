@@ -87,7 +87,7 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-app = FastAPI(debug=True)
+app = FastAPI()
 
 
 @app.post("/voice")
