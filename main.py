@@ -74,7 +74,7 @@ async def apply_ffmpeg_filter(audio: bytes, ffmpeg_filter: FFmpegFlters) -> tupl
 class Settings(BaseSettings):
     api_url: str = "https://api-tts.silero.ai/voice"
     port: int = 10000
-    log_level = logging.ERROR
+    log_level: int = logging.ERROR
 
     class Config:
         env_file = ".env"
