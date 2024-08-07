@@ -74,24 +74,18 @@ async def apply_ffmpeg_filter(audio: bytes, ffmpeg_filter: FFmpegFlters) -> tupl
 class Settings(BaseSettings):
     api_url: str = "https://api-tts.silero.ai/voice"
     port: int = 10000
-    log_level: int = logging.ERROR
 
     class Config:
         env_file = ".env"
 
 
 settings = Settings()
-logging.basicConfig(
-    level=settings.log_level,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 app = FastAPI()
 
 
 @app.post("/voice")
 async def translate_voice(request: VoiceRequest):
     body = request.model_dump()
-    logging.debug("Got request with %d filters", len(request.sfx) if request.sfx else 0)
     silero_response = await do_silero_request(body)
     response = ujson.loads(silero_response)
     encoded_audio = response['results'][0]['audio']
@@ -105,7 +99,7 @@ async def translate_voice(request: VoiceRequest):
         try:
             ffmpeg_filter = FFmpegFlters[sfx]
         except KeyError:
-            logging.error("Got wrong filter - %s. Ignoring...", ffmpeg_filter)
+            print(f"Got wrong filter - '{sfx}'. Ignoring...")
             continue
         stdout, _ = await apply_ffmpeg_filter(stdout, ffmpeg_filter)
         encoded_result = base64.b64encode(stdout)
