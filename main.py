@@ -25,7 +25,7 @@ class VoiceRequest(BaseModel):
     format: str = 'ogg'
     word_ts: bool = False
 
-    sfx: list[str|None] | None = None
+    sfx: list[str] | None = None
 
 
 class FFmpegFlters(Enum):
@@ -74,8 +74,6 @@ async def process_sfxs(audio: bytes, sfxs: list) -> dict[str, bytes]:
     sfxs = sorted(sfxs)
     resulting_audios = {}
     for sfx in sfxs:
-        if sfx is None:
-            continue
         stdout = audio
         try:
             ffmpeg_filter = FFmpegFlters[sfx]
