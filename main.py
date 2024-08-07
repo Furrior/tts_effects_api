@@ -25,7 +25,7 @@ class VoiceRequest(BaseModel):
     format: str = 'ogg'
     word_ts: bool = False
 
-    sfx: list | None = None
+    sfx: list[str|None] | None = None
 
 
 class FFmpegFlters(Enum):
@@ -70,6 +70,23 @@ async def apply_ffmpeg_filter(audio: bytes, ffmpeg_filter: FFmpegFlters) -> tupl
 
     return stdout, stderr
 
+async def process_sfxs(audio: bytes, sfxs: list) -> dict[str, bytes]:
+    sfxs = sorted(sfxs)
+    resulting_audios = {}
+    for sfx in sfxs:
+        if sfx is None:
+            continue
+        stdout = audio
+        try:
+            ffmpeg_filter = FFmpegFlters[sfx]
+        except KeyError:
+            print(f"Got wrong filter - '{sfx}'. Ignoring...")
+            continue
+        stdout, _ = await apply_ffmpeg_filter(stdout, ffmpeg_filter)
+        encoded_result = base64.b64encode(stdout)
+        resulting_audios["_".join(sfxs)] = encoded_result
+    return resulting_audios
+
 
 class Settings(BaseSettings):
     api_url: str = "https://api-tts.silero.ai/voice"
@@ -93,17 +110,10 @@ async def translate_voice(request: VoiceRequest):
     resulting_audios = {"pure": encoded_audio}
     start_processing = time.time()
 
-    sfxs = sorted(request.sfx)
-    for sfx in sfxs:
-        stdout = audio
-        try:
-            ffmpeg_filter = FFmpegFlters[sfx]
-        except KeyError:
-            print(f"Got wrong filter - '{sfx}'. Ignoring...")
-            continue
-        stdout, _ = await apply_ffmpeg_filter(stdout, ffmpeg_filter)
-        encoded_result = base64.b64encode(stdout)
-        resulting_audios["_".join(sfxs)] = encoded_result
+    if request.sfx:
+        processed_audios = await process_sfxs(audio, request.sfx)
+        resulting_audios.update(processed_audios)
+
     processing_time = time.time() - start_processing
 
     response['results'][0]['audio'] = resulting_audios
