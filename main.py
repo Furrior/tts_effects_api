@@ -1,15 +1,15 @@
 import asyncio
 import base64
-import time
 from enum import Enum
+import time
+import logging
 
 import aiohttp
-import ujson
-import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
-
+import ujson
+import uvicorn
 
 class VoiceRequest(BaseModel):
     api_token: str
@@ -24,9 +24,8 @@ class VoiceRequest(BaseModel):
     symbol_durs: list = []
     format: str = 'ogg'
     word_ts: bool = False
-    #health_check: bool = False
 
-    sfx: list | None = None
+    sfx: list[str] | None = None
 
 
 class FFmpegFlters(Enum):
@@ -34,19 +33,13 @@ class FFmpegFlters(Enum):
 
     robot = ["-filter:a",
              "afftfilt=real='hypot(re,im)*sin(0)':imag='hypot(re,im)*cos(0)':win_size=512:overlap=0.7, deesser=i=0.1, volume=volume=1.3"]
-    radio_robot = ["-filter:a",
-                   "afftfilt=real='hypot(re,im)*sin(0)':imag='hypot(re,im)*cos(0)':win_size=512:overlap=0.7, deesser=i=0.7, volume=volume=1.3, highpass=f=1000, lowpass=f=3000, acrusher=1:1:50:0:log"]
     megaphone = ["-filter:a", "highpass=f=500, lowpass=f=4000, volume=volume=10, acrusher=1:1:45:0:log"]
-    megaphone_robot = ["-filter:a",
-                       "afftfilt=real='hypot(re,im)*sin(0)':imag='hypot(re,im)*cos(0)':win_size=1024:overlap=0.5, deesser=i=0.4, highpass=f=500, lowpass=f=4000, volume=volume=10, acrusher=1:1:45:0:log"]
     
-    # Archive
+    # Archive/Shitspawn
     tg_robot = ["-i", "./SynthImpulse.wav", "-i", "./RoomImpulse.wav", "-filter_complex",
                 "[0] aresample=44100 [re_1]; [re_1] apad=pad_dur=2 [in_1]; [in_1] asplit=2 [in_1_1] [in_1_2]; [in_1_1] [1] afir=dry=10:wet=10 [reverb_1]; [in_1_2] [reverb_1] amix=inputs=2:weights=8 1 [mix_1]; [mix_1] asplit=2 [mix_1_1] [mix_1_2]; [mix_1_1] [2] afir=dry=1:wet=1 [reverb_2]; [mix_1_2] [reverb_2] amix=inputs=2:weights=10 1 [mix_2]; [mix_2] equalizer=f=7710:t=q:w=0.6:g=-6,equalizer=f=33:t=q:w=0.44:g=-10 [out]; [out] alimiter=level_in=1:level_out=1:limit=0.5:attack=5:release=20:level=disabled"]
     robot_aziz = ["-filter:a",
              "afftfilt=real='hypot(re,im)*sin(0)':imag='hypot(re,im)*cos(0)':win_size=1024:overlap=0.5, deesser=i=0.4, volume=volume=1.5"]
-    megaphone_robot_aziz = ["-filter:a",
-                       "afftfilt=real='hypot(re,im)*sin(0)':imag='hypot(re,im)*cos(0)':win_size=512:overlap=0.7, deesser=i=0.7, highpass=f=500, lowpass=f=4000, volume=volume=10, acrusher=1:1:45:0:log"]
 
 async def do_silero_request(data: dict) -> bytes:
     async with aiohttp.ClientSession(json_serialize=ujson.dumps) as session:
@@ -81,18 +74,24 @@ async def apply_ffmpeg_filter(audio: bytes, ffmpeg_filter: FFmpegFlters) -> tupl
 class Settings(BaseSettings):
     api_url: str = "https://api-tts.silero.ai/voice"
     port: int = 10000
+    log_level = logging.ERROR
 
     class Config:
         env_file = ".env"
 
 
 settings = Settings()
+logging.basicConfig(
+    level=settings.log_level,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 app = FastAPI()
 
 
 @app.post("/voice")
 async def translate_voice(request: VoiceRequest):
     body = request.model_dump()
+    logging.debug("Got request with %d filters", len(request.sfx) if request.sfx else 0)
     silero_response = await do_silero_request(body)
     response = ujson.loads(silero_response)
     encoded_audio = response['results'][0]['audio']
@@ -106,7 +105,7 @@ async def translate_voice(request: VoiceRequest):
         try:
             ffmpeg_filter = FFmpegFlters[sfx]
         except KeyError:
-            print("Got wrong filter. Ignoring...")
+            logging.error("Got wrong filter - %s. Ignoring...", ffmpeg_filter)
             continue
         stdout, _ = await apply_ffmpeg_filter(stdout, ffmpeg_filter)
         encoded_result = base64.b64encode(stdout)
