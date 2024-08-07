@@ -25,7 +25,7 @@ class VoiceRequest(BaseModel):
     format: str = 'ogg'
     word_ts: bool = False
 
-    sfx: list[str] | None = None
+    sfx: list | None = None
 
 
 class FFmpegFlters(Enum):
